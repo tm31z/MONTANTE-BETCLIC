@@ -1,18 +1,26 @@
+from flask import Flask
 import threading
+import os
 import time
 import requests
 import telebot
 from live_stats import fetch_live_match_stats
 from paris_engine import recommend_bet
-from montante_engine import load_state, calculate_next_step, save_state, init_montante
+from montante_engine import load_state, calculate_next_step, save_state, init_montante, update_state_on_win, reset_montante
 from history import save_result, get_stats
 
 API_TOKEN = "7898519368:AAFuC5CIQ52hzbfsf0HfhRpjz2k_Rd3RclU"
 CHAT_ID = "5824074931"
 bot = telebot.TeleBot(API_TOKEN)
 
-# === BOT COMMANDES TELEGRAM ===
+# === Petit serveur pour Render ===
+app = Flask(__name__)
 
+@app.route('/')
+def index():
+    return "Bot Telegram actif"
+
+# === BOT TELEGRAM ===
 @bot.message_handler(commands=["start"])
 def start_handler(message):
     state = init_montante(100, 1.5)
@@ -88,20 +96,17 @@ def recolive_handler(message):
         f"💸 Mise : {state['current_mise']}€ | Gain : {analysis['gain_net']}€\n"
         f"🔐 Sécurisation : {analysis['secure_now']}€")
 
-# === THREAD SCAN AUTO 24/24 ===
-
+# === SCAN AUTO EN THREAD PARALLELE ===
 def auto_scan_loop():
     while True:
         state = load_state()
         if not state:
             time.sleep(60)
             continue
-
         match_data = fetch_live_match_stats()
         if not match_data:
             time.sleep(60)
             continue
-
         reco, conf = recommend_bet(match_data["stats"])
         if reco != "Aucun pari recommandé" and conf >= 75:
             analysis = calculate_next_step(state)
@@ -119,7 +124,8 @@ def auto_scan_loop():
             bot.send_message(CHAT_ID, msg)
         time.sleep(60)
 
-# === LANCEMENT DES DEUX THREADS ===
+# === EXECUTION ===
 if __name__ == "__main__":
     threading.Thread(target=auto_scan_loop).start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
     bot.infinity_polling()
