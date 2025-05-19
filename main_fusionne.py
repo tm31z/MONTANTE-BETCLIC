@@ -96,6 +96,32 @@ def recolive_handler(message):
         f"💸 Mise : {state['current_mise']}€ | Gain : {analysis['gain_net']}€\n"
         f"🔐 Sécurisation : {analysis['secure_now']}€")
 
+
+@bot.message_handler(commands=["force"])
+def force_handler(message):
+    state = load_state()
+    match_data = fetch_live_match_stats()
+    if not match_data:
+        bot.send_message(message.chat.id, "❌ Aucun match live dispo.")
+        return
+    reco, conf = recommend_bet(match_data["stats"])
+    analysis = calculate_next_step(state)
+    save_result(state["current_step"], state["current_mise"], analysis["gain_net"], analysis["secure_now"], conf, reco)
+    bot.send_message(message.chat.id,
+        f"⚠️ FORCÉ (sans filtre)\n\n"
+        f"📊 Match : {match_data['match']} ({match_data['minute']}')\n"
+        f"💡 Pari : {reco}\n"
+        f"🔎 Confiance : {conf}%\n"
+        f"💸 Mise : {state['current_mise']}€ | Gain : {analysis['gain_net']}€\n"
+        f"🔐 Sécurisation : {analysis['secure_now']}€")
+
+
+@bot.message_handler(commands=["reset"])
+def reset_handler(message):
+    state = init_montante(100, 1.5)
+    save_state(state)
+    bot.send_message(message.chat.id, "🔄 Montante complètement réinitialisée à zéro.")
+
 # === SCAN AUTO EN THREAD PARALLELE ===
 def auto_scan_loop():
     while True:
